@@ -9,10 +9,42 @@ import Box from "@material-ui/core/Box";
 import BrandLogoNav from "@components/BrandLogoNav";
 import { CONTENT_SOURCE } from "@common/global-config";
 
-let problemPool = require(`@generated/processed-content-pool/${CONTENT_SOURCE}.json`)
+let problemPool = require(`@generated/processed-content-pool/${CONTENT_SOURCE}.json`);
 
 let seed = Date.now().toString();
 console.log("Generated seed");
+
+/*
+ * EduTutor interaction analytics
+ *
+ * Stores learner interaction data locally so it can later be
+ * displayed through the learning analytics / educator dashboard.
+ */
+
+const ANALYTICS_STORAGE_KEY = "edututor_interaction_logs";
+
+function saveInteractionLog(log) {
+    try {
+        const existing = JSON.parse(
+            window.localStorage.getItem(ANALYTICS_STORAGE_KEY) || "[]"
+        );
+
+        existing.push(log);
+
+        // Keep the demonstration dataset bounded.
+        const bounded = existing.slice(-500);
+
+        window.localStorage.setItem(
+            ANALYTICS_STORAGE_KEY,
+            JSON.stringify(bounded)
+        );
+    } catch (error) {
+        console.warn(
+            "Unable to save EduTutor analytics log:",
+            error
+        );
+    }
+}
 
 class DebugPlatform extends React.Component {
     static contextType = ThemeContext;
@@ -20,34 +52,47 @@ class DebugPlatform extends React.Component {
     constructor(props, context) {
         context.debug = true;
         super(props);
+
         this.problemIndex = {
             problems: problemPool
         };
+
         this.completedProbs = new Set();
         this.lesson = null;
 
         let chosenProblem = null;
         const problemIDs = [];
-        // Add each Q Matrix skill model attribute to each step
+
+        // Add each Q Matrix skill model attribute to each step.
         for (const problem of this.problemIndex.problems) {
-            problemIDs.push(problem.id)
+            problemIDs.push(problem.id);
+
             if (problem.id === this.props.problemID) {
                 chosenProblem = problem;
             }
-            for (let stepIndex = 0; stepIndex < problem.steps.length; stepIndex++) {
+
+            for (
+                let stepIndex = 0;
+                stepIndex < problem.steps.length;
+                stepIndex++
+            ) {
                 const step = problem.steps[stepIndex];
-                step.knowledgeComponents = context.skillModel[step.id];
+
+                step.knowledgeComponents =
+                    context.skillModel[step.id];
             }
         }
-        context.problemID = this.props.problemID
-        context.problemIDs = problemIDs.sort(this.__compareProblemID)
+
+        context.problemID = this.props.problemID;
+
+        context.problemIDs =
+            problemIDs.sort(this.__compareProblemID);
 
         this.state = {
             currProblem: chosenProblem,
             status: "learning",
             seed: seed
-        }
-
+        };
     }
 
     componentDidMount() {
@@ -55,184 +100,525 @@ class DebugPlatform extends React.Component {
             this.context.needRefresh = false;
             window.location.reload();
         }
-        this.onComponentUpdate(null, null, null)
+
+        this.onComponentUpdate(null, null, null);
     }
 
     componentWillUnmount() {
-        this.context.problemID = "n/a"
+        this.context.problemID = "n/a";
     }
 
-    componentDidUpdate(prevProps, prevState, snapshot) {
-        this.onComponentUpdate(prevProps, prevState, snapshot)
+    componentDidUpdate(
+        prevProps,
+        prevState,
+        snapshot
+    ) {
+        this.onComponentUpdate(
+            prevProps,
+            prevState,
+            snapshot
+        );
     }
 
-    onComponentUpdate(prevProps, prevState, snapshot){
-        if (Boolean(this.state.currProblem?.id) && this.context.problemID !== this.state.currProblem.id) {
-            this.context.problemID = this.state.currProblem.id
+    onComponentUpdate(
+        prevProps,
+        prevState,
+        snapshot
+    ) {
+        if (
+            Boolean(this.state.currProblem?.id) &&
+            this.context.problemID !==
+                this.state.currProblem.id
+        ) {
+            this.context.problemID =
+                this.state.currProblem.id;
         }
     }
 
     selectProblem = (problemID, context) => {
         seed = Date.now().toString();
-        this.setState({ seed: seed }, () => console.log(seed));
+
+        this.setState(
+            {
+                seed: seed
+            },
+            () => console.log(seed)
+        );
+
         context.debug = true;
+
         this.problemIndex = {
             problems: problemPool
         };
+
         this.completedProbs = new Set();
         this.lesson = null;
 
         let chosenProblem = null;
         const problemIDs = [];
-        // Add each Q Matrix skill model attribute to each step
-        for (const problem of this.problemIndex.problems) {
-            problemIDs.push(problem.id)
-            if (problem.id === this.props.problemID) {
+
+        for (
+            const problem of this.problemIndex.problems
+        ) {
+            problemIDs.push(problem.id);
+
+            if (problem.id === problemID) {
                 chosenProblem = problem;
             }
-            for (let stepIndex = 0; stepIndex < problem.steps.length; stepIndex++) {
-                const step = problem.steps[stepIndex];
-                step.knowledgeComponents = context.skillModel[step.id];
+
+            for (
+                let stepIndex = 0;
+                stepIndex < problem.steps.length;
+                stepIndex++
+            ) {
+                const step =
+                    problem.steps[stepIndex];
+
+                step.knowledgeComponents =
+                    context.skillModel[step.id];
             }
         }
-        context.problemIDs = problemIDs.sort(this.__compareProblemID);
-        console.log(context.problemIDs)
+
+        context.problemIDs =
+            problemIDs.sort(
+                this.__compareProblemID
+            );
+
+        console.log(context.problemIDs);
 
         this.setState({
             currProblem: chosenProblem,
             status: "learning",
             seed: seed
-        })
-    }
+        });
+    };
 
     __compareProblemID = (a, b) => {
         var aNum = a.match(/\d+$/);
+
         if (aNum) {
             aNum = parseInt(aNum[0]);
         }
 
         var bNum = b.match(/\d+$/);
+
         if (bNum) {
             bNum = parseInt(bNum[0]);
         }
 
         var aName = a.match(/^[^0-9]+/);
+
         if (aName) {
             aName = aName[0];
         }
 
         var bName = b.match(/^[^0-9]+/);
+
         if (bName) {
             bName = bName[0];
         }
 
         if (aName !== bName) {
             return aName.localeCompare(bName);
-        } else {
-            return aNum - bNum;
         }
-    }
 
-    _nextProblem = (context, problemID) => {
-        seed = Date.now().toString();
-        this.setState({ seed: seed });
-        this.props.saveProgress();
-        var chosenProblem = null;
+        return aNum - bNum;
+    };
 
-        for (var problem of this.problemIndex.problems) {
-            // Calculate the mastery for this problem
-            var probMastery = 1;
-            var isRelevant = false;
-            for (var step of problem.steps) {
-                if (typeof step.knowledgeComponents === "undefined") {
+    /*
+     * Calculate problem-level mastery using the
+     * existing BKT skill states.
+     *
+     * IMPORTANT:
+     * The previous implementation never changed
+     * isRelevant from false to true. Therefore
+     * probMastery was always null.
+     */
+    _calculateProblemMastery = (
+        context,
+        problem
+    ) => {
+        var probMastery = 1;
+        var isRelevant = false;
+
+        for (var step of problem.steps) {
+            if (
+                typeof step.knowledgeComponents ===
+                "undefined"
+            ) {
+                continue;
+            }
+
+            for (
+                var kc of step.knowledgeComponents
+            ) {
+                if (
+                    typeof context.bktParams[kc] ===
+                    "undefined"
+                ) {
+                    console.log(
+                        "BKT Parameter " +
+                        kc +
+                        " does not exist."
+                    );
+
                     continue;
                 }
-                for (var kc of step.knowledgeComponents) {
-                    if (typeof context.bktParams[kc] === "undefined") {
-                        console.log("BKT Parameter " + kc + " does not exist.");
-                        continue;
-                    }
-                    // Multiply all the mastery priors
-                    if (!(kc in context.bktParams)) {
-                        console.log("Missing BKT parameter: " + kc);
-                    }
-                    probMastery *= context.bktParams[kc].probMastery;
+
+                if (!(kc in context.bktParams)) {
+                    console.log(
+                        "Missing BKT parameter " +
+                        kc
+                    );
+
+                    continue;
                 }
-            }
-            if (isRelevant) {
-                problem.probMastery = probMastery;
-            } else {
-                problem.probMastery = null;
+
+                /*
+                 * The problem contains a valid
+                 * knowledge component.
+                 */
+                isRelevant = true;
+
+                /*
+                 * Combine the mastery probabilities
+                 * of the problem's knowledge components.
+                 */
+                probMastery *=
+                    context.bktParams[kc]
+                        .probMastery;
             }
         }
 
-        chosenProblem = context.heuristic(this.problemIndex.problems, this.completedProbs);
-        //console.log(Object.keys(context.bktParams).map((skill) => (context.bktParams[skill].probMastery <= this.lesson.learningObjectives[skill])));
+        if (isRelevant) {
+            problem.probMastery =
+                probMastery;
 
+            return probMastery;
+        }
 
-        this.setState({ currProblem: chosenProblem, status: "learning" });
-        console.log("Next problem: ", chosenProblem.id)
+        problem.probMastery = null;
+
+        return null;
+    };
+
+    _nextProblem = (
+        context,
+        problemID
+    ) => {
+        seed = Date.now().toString();
+
+        this.setState({
+            seed: seed
+        });
+
+        this.props.saveProgress();
+
+        var chosenProblem = null;
+
+        /*
+         * Calculate mastery for every available
+         * problem before the heuristic selects
+         * the next problem.
+         */
+        for (
+            var problem of
+            this.problemIndex.problems
+        ) {
+            this._calculateProblemMastery(
+                context,
+                problem
+            );
+        }
+
+        /*
+         * Existing adaptive heuristic.
+         */
+        chosenProblem =
+            context.heuristic(
+                this.problemIndex.problems,
+                this.completedProbs
+            );
+
+        if (chosenProblem) {
+            this.setState({
+                currProblem: chosenProblem,
+                status: "learning"
+            });
+
+            console.log(
+                "Next problem: ",
+                chosenProblem.id
+            );
+        } else {
+            console.log(
+                "No eligible next problem was found."
+            );
+
+            this.setState({
+                currProblem: null,
+                status: "completed"
+            });
+        }
+
         return chosenProblem;
-    }
+    };
 
-    problemComplete = (context) => {
-        this.completedProbs.add(this.state.currProblem.id);
-        return this._nextProblem(context);
-    }
+    /*
+     * Called when the learner completes a problem.
+     *
+     * The existing ProblemWrapper can continue calling:
+     *
+     *     problemComplete(context)
+     *
+     * If later it supplies:
+     *
+     *     problemComplete(context, {
+     *         isCorrect: true
+     *     })
+     *
+     * correctness will automatically be stored.
+     */
+    problemComplete = (
+        context,
+        result = {}
+    ) => {
+        const currentProblem =
+            this.state.currProblem;
+
+        if (!currentProblem) {
+            return null;
+        }
+
+        /*
+         * Mark problem as completed.
+         */
+        this.completedProbs.add(
+            currentProblem.id
+        );
+
+        /*
+         * Get current problem mastery.
+         */
+        let mastery = null;
+
+        if (
+            currentProblem.probMastery != null
+        ) {
+            mastery =
+                currentProblem.probMastery;
+        }
+
+        /*
+         * Create analytics record.
+         */
+        const interaction = {
+            problemId:
+                currentProblem.id,
+
+            timestamp:
+                new Date().toISOString(),
+
+            mastery:
+                mastery,
+
+            completedProblems:
+                this.completedProbs.size,
+
+            correctness:
+                typeof result.isCorrect ===
+                "boolean"
+                    ? result.isCorrect
+                    : null,
+
+            subject:
+                CONTENT_SOURCE,
+
+            event:
+                "problem_completed"
+        };
+
+        /*
+         * Store interaction.
+         */
+        saveInteractionLog(
+            interaction
+        );
+
+        console.log(
+            "EduTutor interaction logged:",
+            interaction
+        );
+
+        /*
+         * Continue existing adaptive
+         * learning flow.
+         */
+        return this._nextProblem(
+            context,
+            currentProblem.id
+        );
+    };
 
     render() {
         return (
-            <div style={{ backgroundColor: "#F6F6F6", paddingBottom: 20 }}>
+            <div
+                style={{
+                    backgroundColor: "#F6F6F6",
+                    paddingBottom: 20
+                }}
+            >
                 <AppBar position="static">
                     <Toolbar>
-                        <Grid container spacing={0} role={"navigation"}>
-                            <Grid item xs={3} key={1}>
-                                <BrandLogoNav noLink={true}/>
+
+                        <Grid
+                            container
+                            spacing={0}
+                            role={"navigation"}
+                        >
+
+                            <Grid
+                                item
+                                xs={3}
+                                key={1}
+                            >
+                                <BrandLogoNav
+                                    noLink={true}
+                                />
                             </Grid>
-                            <Grid item xs={6} key={2}>
+
+                            <Grid
+                                item
+                                xs={6}
+                                key={2}
+                            >
                                 <div
                                     style={{
-                                        textAlign: 'center',
-                                        textAlignVertical: 'center',
-                                        paddingTop: "6px",
-                                        paddingBottom: "6px"
-                                    }}>
-                                    {"Debug Mode: " + this.props.problemID}
+                                        textAlign:
+                                            "center",
+
+                                        textAlignVertical:
+                                            "center",
+
+                                        paddingTop:
+                                            "6px",
+
+                                        paddingBottom:
+                                            "6px"
+                                    }}
+                                >
+                                    {
+                                        "Debug Mode: " +
+                                        this.props
+                                            .problemID
+                                    }
                                 </div>
                             </Grid>
-                            <Grid item xs={3} key={3}>
-                                <div style={{ textAlign: 'right' }}>
+
+                            <Grid
+                                item
+                                xs={3}
+                                key={3}
+                            >
+                                <div
+                                    style={{
+                                        textAlign:
+                                            "right"
+                                    }}
+                                >
                                     <Button
-                                        aria-label={`Return to home`}
-                                        aria-roledescription={`Return to the home page`}
+                                        aria-label={
+                                            `Return to home`
+                                        }
+
+                                        aria-roledescription={
+                                            `Return to the home page`
+                                        }
+
                                         role={"link"}
+
                                         color="inherit"
+
                                         onClick={() => {
-                                            this.props.history.push("/")
-                                            this.setState({ status: "lessonSelection" })
-                                        }}>
+                                            this.props.history.push(
+                                                "/"
+                                            );
+
+                                            this.setState({
+                                                status:
+                                                    "lessonSelection"
+                                            });
+                                        }}
+                                    >
                                         Home
                                     </Button>
                                 </div>
                             </Grid>
+
                         </Grid>
 
                     </Toolbar>
                 </AppBar>
-                {this.state.currProblem
-                    ? <ProblemWrapper problem={this.state.currProblem} problemComplete={this.problemComplete}
-                               lesson={this.lesson}
-                               seed={this.state.seed}/>
-                    : <Box width={'100%'} textAlign={'center'} pt={4} pb={4}>
-                        <Typography variant={'h3'}>Problem id <code>{this.props.problemID}</code> is not
-                            valid!</Typography>
-                    </Box>
-                }
-            </div>
 
+                {this.state.currProblem ? (
+
+                    <ProblemWrapper
+                        problem={
+                            this.state.currProblem
+                        }
+
+                        problemComplete={
+                            this.problemComplete
+                        }
+
+                        lesson={
+                            this.lesson
+                        }
+
+                        seed={
+                            this.state.seed
+                        }
+                    />
+
+                ) : (
+
+                    <Box
+                        width={"100%"}
+                        textAlign={"center"}
+                        pt={4}
+                        pb={4}
+                    >
+
+                        <Typography
+                            variant={"h3"}
+                        >
+                            {
+                                this.state.status ===
+                                "completed"
+                                    ? "Learning session completed."
+                                    : (
+                                        <>
+                                            Problem id{" "}
+                                            <code>
+                                                {
+                                                    this
+                                                        .props
+                                                        .problemID
+                                                }
+                                            </code>{" "}
+                                            is not
+                                            valid!
+                                        </>
+                                    )
+                            }
+                        </Typography>
+
+                    </Box>
+                )}
+
+            </div>
         );
     }
-
 }
 
 export default DebugPlatform;

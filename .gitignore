@@ -1,5 +1,3 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
 /node_modules
 /.pnp
@@ -10,17 +8,20 @@
 
 # production
 /build
+/dist
 
-# misc
-.DS_Store
+# local environment files
+.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
+# logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
 # Secrets
 credentials.js
@@ -28,11 +29,25 @@ credentials-secret.js
 service-account-credentials.json
 sheets-service-account.json
 oatutor-firebase-adminsdk.json
+firebase-adminsdk-*.json
 
-# Misc.
+# IDE
 **/.vscode
 **/.idea
 **/.Rhistory
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Package manager
 pnpm-lock.yaml
 
+# Generated files
 /generated
+# Python virtual environment
+backend/.venv/
+
+# Environment variables
+.env
+**/.env

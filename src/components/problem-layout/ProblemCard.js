@@ -6,187 +6,451 @@ import CardContent from "@material-ui/core/CardContent";
 import Grid from "@material-ui/core/Grid";
 import Button from "@material-ui/core/Button";
 import IconButton from "@material-ui/core/IconButton";
+
 import { fetchDynamicHint } from "./DynamicHintHelper";
 
 import { checkAnswer } from "../../platform-logic/checkAnswer.js";
 import styles from "./common-styles.js";
 import { withStyles } from "@material-ui/core/styles";
 import HintSystem from "./HintSystem.js";
+
 import {
     chooseVariables,
     renderText,
 } from "../../platform-logic/renderText.js";
+
 import {
     DYNAMIC_HINT_URL,
     DYNAMIC_HINT_TEMPLATE,
-    ENABLE_BOTTOM_OUT_HINTS,
     ThemeContext,
 } from "../../config/config.js";
 
 import "./ProblemCard.css";
+
 import ProblemInput from "../problem-input/ProblemInput";
 import Spacer from "../Spacer";
 import { stagingProp } from "../../util/addStagingProperty";
 import ErrorBoundary from "../ErrorBoundary";
+
 import {
     toastNotifyCompletion,
-    toastNotifyCorrectness, toastNotifyEmpty
+    toastNotifyCorrectness,
+    toastNotifyEmpty
 } from "./ToastNotifyCorrectness";
+
 import { joinList } from "../../util/formListString";
-import withTranslation from "../../util/withTranslation.js"
+import withTranslation from "../../util/withTranslation.js";
 import CryptoJS from "crypto-js";
 
+
 class ProblemCard extends React.Component {
+
     static contextType = ThemeContext;
 
-    constructor(props, context) {
-        super(props);
-        //console.log("problem lesson props:", props);
 
-        this.translate = props.translate
+    constructor(props, context) {
+
+        super(props);
+
+        this.translate = props.translate;
+
         this.step = props.step;
         this.index = props.index;
-        this.giveStuFeedback = props.giveStuFeedback;
-        this.giveStuHints = props.giveStuHints;
-        this.unlockFirstHint = props.unlockFirstHint;
-        this.giveHintOnIncorrect = props.giveHintOnIncorrect
-        this.keepMCOrder = props.keepMCOrder;
-        this.keyboardType = props.keyboardType;
-        this.allowRetry = this.giveStuFeedback;
 
-        this.giveStuBottomHint = props.giveStuBottomHint;
-        console.log("ProblemCard - giveStuBottomHint:", this.giveStuBottomHint);
-        console.log("ProblemCard - all props:", props);
+        this.giveStuFeedback =
+            props.giveStuFeedback;
 
-        this.giveDynamicHint = props.giveDynamicHint;
-        this.showHints = this.giveStuHints == null || this.giveStuHints;
-        this.showCorrectness = this.giveStuFeedback;
-        this.expandFirstIncorrect = false;
+        this.giveStuHints =
+            props.giveStuHints;
 
-        this.problemTitle = props.problemTitle;
-        this.problemSubTitle = props.problemSubTitle;
-        this.prompt_template = props.prompt_template
-            ? props.prompt_template
-            : DYNAMIC_HINT_TEMPLATE;
-        console.debug(
-            "this.step",
-            this.step,
-            "showHints",
-            this.showHints,
-            "hintPathway",
-            context.hintPathway
+        this.unlockFirstHint =
+            props.unlockFirstHint;
+
+        this.giveHintOnIncorrect =
+            props.giveHintOnIncorrect;
+
+        this.keepMCOrder =
+            props.keepMCOrder;
+
+        this.keyboardType =
+            props.keyboardType;
+
+        this.allowRetry =
+            this.giveStuFeedback;
+
+        this.giveStuBottomHint =
+            props.giveStuBottomHint;
+
+        this.giveDynamicHint = true;
+
+        this.showHints =
+            this.giveStuHints == null ||
+            this.giveStuHints;
+
+        this.showCorrectness =
+            this.giveStuFeedback;
+
+        this.expandFirstIncorrect =
+            false;
+
+        this.problemTitle =
+            props.problemTitle;
+
+        this.problemSubTitle =
+            props.problemSubTitle;
+
+
+        this.prompt_template =
+            props.prompt_template
+                ? props.prompt_template
+                : DYNAMIC_HINT_TEMPLATE;
+
+
+        console.log(
+            "ProblemCard initialized"
         );
-        this.hints = this.giveDynamicHint
-            ? []
-            : JSON.parse(JSON.stringify(this.step.hints[context.hintPathway]));
+
+        console.log(
+            "giveDynamicHint:",
+            this.giveDynamicHint
+        );
+
+
+        /*
+         * Load normal OATutor hints.
+         */
+
+        this.hints =
+            JSON.parse(
+                JSON.stringify(
+                    this.step.hints[
+                        context.hintPathway
+                    ]
+                )
+            );
+
+
+        /*
+         * Convert dependencies from IDs
+         * into hint indexes.
+         */
 
         for (let hint of this.hints) {
-            hint.dependencies = hint.dependencies.map((dependency) =>
-                this._findHintId(this.hints, dependency)
-            );
+
+            hint.dependencies =
+                hint.dependencies.map(
+                    (dependency) =>
+                        this._findHintId(
+                            this.hints,
+                            dependency
+                        )
+                );
+
+
             if (hint.subHints) {
-                for (let subHint of hint.subHints) {
-                    subHint.dependencies = subHint.dependencies.map(
-                        (dependency) =>
-                            this._findHintId(hint.subHints, dependency)
-                    );
+
+                for (
+                    let subHint of hint.subHints
+                ) {
+
+                    subHint.dependencies =
+                        subHint.dependencies.map(
+                            (dependency) =>
+                                this._findHintId(
+                                    hint.subHints,
+                                    dependency
+                                )
+                        );
                 }
             }
         }
 
-        // Bottom out hints option
 
-        console.log("Constructor - About to check bottom hints:", this.giveStuBottomHint, context.debug, context["use_expanded_view"]);
+        /*
+         * Bottom-out answer hint.
+         *
+         * Existing OATutor answer hint
+         * remains enabled.
+         */
 
         if (
             this.giveStuBottomHint &&
-            !(context.debug && context["use_expanded_view"])
+            !(
+                context.debug &&
+                context["use_expanded_view"]
+            )
         ) {
-            // Bottom out hints
+
             this.hints.push({
-                id: this.step.id + "-h" + (this.hints.length + 1),
-                title: this.translate('hintsystem.answer'),
-                text: this.translate('hintsystem.answerIs') + this.step.stepAnswer,
-                type: "bottomOut",
-                dependencies: Array.from(Array(this.hints.length).keys()),
+
+                id:
+                    this.step.id +
+                    "-h" +
+                    (this.hints.length + 1),
+
+                title:
+                    this.translate(
+                        "hintsystem.answer"
+                    ),
+
+                text:
+                    this.translate(
+                        "hintsystem.answerIs"
+                    ) +
+                    this.step.stepAnswer,
+
+                type:
+                    "bottomOut",
+
+                dependencies:
+                    Array.from(
+                        Array(
+                            this.hints.length
+                        ).keys()
+                    ),
             });
-            // Bottom out sub hints
-            this.hints.map((hint, i) => {
-                if (hint.type === "scaffold") {
-                    if (hint.subHints == null) {
-                        hint.subHints = [];
+
+
+            /*
+             * Bottom-out sub-hints.
+             */
+
+            this.hints.map(
+                (hint, i) => {
+
+                    if (
+                        hint.type ===
+                        "scaffold"
+                    ) {
+
+                        if (
+                            hint.subHints ==
+                            null
+                        ) {
+                            hint.subHints = [];
+                        }
+
+
+                        hint.subHints.push({
+
+                            id:
+                                this.step.id +
+                                "-h" +
+                                i +
+                                "-s" +
+                                (
+                                    hint
+                                        .subHints
+                                        .length +
+                                    1
+                                ),
+
+                            title:
+                                this.translate(
+                                    "hintsystem.answer"
+                                ),
+
+                            text:
+                                this.translate(
+                                    "hintsystem.answerIs"
+                                ) +
+                                hint.hintAnswer[0],
+
+                            type:
+                                "bottomOut",
+
+                            dependencies:
+                                Array.from(
+                                    Array(
+                                        hint
+                                            .subHints
+                                            .length
+                                    ).keys()
+                                ),
+                        });
                     }
-                    hint.subHints.push({
-                        id:
-                            this.step.id +
-                            "-h" +
-                            i +
-                            "-s" +
-                            (hint.subHints.length + 1),
-                        title: this.translate('hintsystem.answer'),
-                        text: this.translate('hintsystem.answerIs') + hint.hintAnswer[0],
-                        type: "bottomOut",
-                        dependencies: Array.from(
-                            Array(hint.subHints.length).keys()
-                        ),
-                    });
+
+                    return null;
                 }
-                return null;
-            });
+            );
         }
 
+
+        /*
+         * State.
+         */
+
         this.state = {
+
             inputVal: "",
-            isCorrect: context.use_expanded_view && context.debug ? true : null,
+
+            isCorrect:
+                context.use_expanded_view &&
+                context.debug
+                    ? true
+                    : null,
+
             checkMarkOpacity:
-                context.use_expanded_view && context.debug ? "100" : "0",
-            displayHints: false,
-            hintsFinished: new Array(this.hints.length).fill(0),
-            equation: "",
-            usedHints: false,
-            dynamicHint: "",
-            bioInfo: "",
-            enableHintGeneration: true,
-            activeHintType: "none", // "none", or "normal".
-            hints: this.hints,
-            // When we are currently streaming the response from ChatGPT, this variable is `true`
-            isGeneratingHint: false, 
-            lastAIHintHash: null,
+                context.use_expanded_view &&
+                context.debug
+                    ? "100"
+                    : "0",
+
+            displayHints:
+                false,
+
+            hintsFinished:
+                new Array(
+                    this.hints.length
+                ).fill(0),
+
+            equation:
+                "",
+
+            usedHints:
+                false,
+
+            dynamicHint:
+                "",
+
+            bioInfo:
+                "",
+
+            enableHintGeneration:
+                true,
+
+            activeHintType:
+                "none",
+
+            hints:
+                this.hints,
+
+            isGeneratingHint:
+                false,
+
+            lastAIHintHash:
+                null,
         };
 
-         // This is used for AI hint generation
-         if (this.giveDynamicHint) {
+
+        /*
+         * Add AI hint.
+         *
+         * AI hint is added BEFORE normal hints.
+         */
+
+        if (this.giveDynamicHint) {
+
             const gptHint = {
-                id: this.step.id + "-h0",  // Unique ID for the GPT hint
-                title: "ChatGPT AI Hint",  // Translated title
-                text: "Loading...",
-                type: "gptHint",  // Custom type for GPT hint
-                dependencies: [],
+
+                id:
+                    this.step.id +
+                    "-h0",
+
+                title:
+                    "ChatGPT AI Hint",
+
+                text:
+                    "Click the hint button to generate an AI hint.",
+
+                type:
+                    "gptHint",
+
+                dependencies:
+                    [],
             };
-        
-            this.hints.unshift(gptHint);
+
+
+            this.hints.unshift(
+                gptHint
+            );
+
+
+            /*
+             * Keep state.hints synchronized
+             * with the updated hint list.
+             */
+
+            this.state.hints =
+                this.hints;
+
+            this.state.hintsFinished =
+                new Array(
+                    this.hints.length
+                ).fill(0);
         }
     }
 
+
+    /*
+     * Hash student's answer.
+     */
+
     hashAnswer = (answer) => {
-        return CryptoJS.SHA256(answer).toString();
+
+        return CryptoJS
+            .SHA256(
+                answer || ""
+            )
+            .toString();
     };
 
-    _findHintId = (hints, targetId) => {
-        for (var i = 0; i < hints.length; i++) {
-            if (hints[i].id === targetId) {
+
+    /*
+     * Find hint index by ID.
+     */
+
+    _findHintId = (
+        hints,
+        targetId
+    ) => {
+
+        for (
+            let i = 0;
+            i < hints.length;
+            i++
+        ) {
+
+            if (
+                hints[i].id ===
+                targetId
+            ) {
+
                 return i;
             }
         }
-        console.debug("hint not found..?", hints, "target:", targetId);
+
+
+        console.debug(
+            "Hint not found",
+            hints,
+            "target:",
+            targetId
+        );
+
+
         return -1;
     };
 
-    // TODO: Incorporate this in the AI Hinting workflow
+
+    /*
+     * Bio information.
+     */
+
     updateBioInfo() {
-        const bioInfo = JSON.parse(localStorage.getItem("bioInfo"));
+
+        const bioInfo =
+            JSON.parse(
+                localStorage.getItem(
+                    "bioInfo"
+                )
+            );
+
+
         if (bioInfo) {
+
             const {
+
                 gender,
                 age,
                 confidenceQ1,
@@ -195,41 +459,106 @@ class ProblemCard extends React.Component {
                 judgementQ2,
                 judgementQ3,
                 other,
+
             } = bioInfo;
-            const bio = `I'm a ${gender} and I'm ${age} years old. ${confidenceQ1}. ${confidenceQ2}. 
-            For the statement that "if I had more time for practice, I would be better in mathematics", my answer is ${judgementQ1}.
-            For the statement that "if I was more patient while solving mathematical problems, I would be better in mathematics", my answer is ${judgementQ2}.
-            For the statement that "No matter how much time I devote for studying mathematics, I can’t improve my grades", my answer is ${judgementQ3}. 
-            ${other}
+
+
+            const bio = `
+                I'm a ${gender} and I'm ${age} years old.
+                ${confidenceQ1}.
+                ${confidenceQ2}.
+
+                For the statement that
+                "if I had more time for practice,
+                I would be better in mathematics",
+                my answer is ${judgementQ1}.
+
+                For the statement that
+                "if I was more patient while solving
+                mathematical problems, I would be better
+                in mathematics",
+                my answer is ${judgementQ2}.
+
+                For the statement that
+                "No matter how much time I devote for
+                studying mathematics, I can't improve
+                my grades",
+                my answer is ${judgementQ3}.
+
+                ${other}
             `;
-            this.setState({ bioInfo: bio });
+
+
+            this.setState({
+                bioInfo: bio
+            });
         }
     }
 
+
     componentDidMount() {
-        // Start an asynchronous task
+
         this.updateBioInfo();
-        console.log("student show hints status: ", this.showHints);
+
+
+        console.log(
+            "Student show hints:",
+            this.showHints
+        );
+
+
+        console.log(
+            "AI dynamic hint enabled:",
+            this.giveDynamicHint
+        );
     }
 
-    componentDidUpdate(prevProps) {
-        // Check if specific props have changed
+
+    /*
+     * IMPORTANT:
+     *
+     * Do NOT clear dynamicHint here.
+     *
+     * The previous version was doing:
+     *
+     * dynamicHint: ""
+     *
+     * which could erase the generated AI hint.
+     */
+
+    componentDidUpdate(
+        prevProps
+    ) {
+
         if (
             this.props.clearStateOnPropChange !==
             prevProps.clearStateOnPropChange
         ) {
-            // Clear out state variables
-            this.setState({
-                dynamicHint: "",
-            });
+
             this.updateBioInfo();
         }
     }
 
+
+    /*
+     * Submit answer.
+     */
+
     submit = () => {
-        console.debug("submitting problem");
-        const { inputVal, hintsFinished } = this.state;
+
+        console.debug(
+            "Submitting problem"
+        );
+
+
         const {
+            inputVal,
+            hintsFinished
+        } = this.state;
+
+
+        const {
+
             variabilization,
             knowledgeComponents,
             precision,
@@ -237,158 +566,487 @@ class ProblemCard extends React.Component {
             answerType,
             stepBody,
             stepTitle,
-        } = this.step;
-        const { seed, problemVars, problemID, courseName, answerMade, lesson, getMasteryData } =
-            this.props;
 
-        if (inputVal == '') {
-            toastNotifyEmpty(this.translate)
+        } = this.step;
+
+
+        const {
+
+            seed,
+            problemVars,
+            problemID,
+            courseName,
+            answerMade,
+            lesson,
+            getMasteryData
+
+        } = this.props;
+
+
+        if (
+            inputVal === ""
+        ) {
+
+            toastNotifyEmpty(
+                this.translate
+            );
+
             return;
         }
 
-        const [parsed, correctAnswer, reason] = checkAnswer({
-            attempt: inputVal,
-            actual: stepAnswer,
-            answerType: answerType,
-            precision: precision,
-            variabilization: chooseVariables(
-                Object.assign({}, problemVars, variabilization),
-                seed
-            ),
-            questionText: stepBody.trim() || stepTitle.trim(),
-            answerValidator: this.step.answerValidator
+
+        const [
+            parsed,
+            correctAnswer
+        ] = checkAnswer({
+
+            attempt:
+                inputVal,
+
+            actual:
+                stepAnswer,
+
+            answerType:
+                answerType,
+
+            precision:
+                precision,
+
+            variabilization:
+                chooseVariables(
+
+                    Object.assign(
+                        {},
+                        problemVars,
+                        variabilization
+                    ),
+
+                    seed
+                ),
+
+            questionText:
+                stepBody.trim() ||
+                stepTitle.trim(),
+
+            answerValidator:
+                this.step.answerValidator
         });
 
-        const isCorrect = !!correctAnswer;
 
-        if (this.showCorrectness) {
-            toastNotifyCorrectness(isCorrect, reason, this.translate);
+        const isCorrect =
+            !!correctAnswer;
+
+
+        if (
+            this.showCorrectness
+        ) {
+
+            toastNotifyCorrectness(
+
+                isCorrect,
+
+                "",
+
+                this.translate
+            );
+
         } else {
-            toastNotifyCompletion(this.translate);
+
+            toastNotifyCompletion(
+                this.translate
+            );
         }
 
-        this.setState({
-            isCorrect,
-            checkMarkOpacity: isCorrect ? "100" : "0",
-        });
-        answerMade(this.index, knowledgeComponents, isCorrect);
 
-        const { masteryScore, kcMastery } = getMasteryData
-            ? getMasteryData(knowledgeComponents)
-            : { masteryScore: null, kcMastery: null };
+        this.setState({
+
+            isCorrect:
+
+                isCorrect,
+
+            checkMarkOpacity:
+
+                isCorrect
+                    ? "100"
+                    : "0",
+
+        });
+
+
+        answerMade(
+
+            this.index,
+
+            knowledgeComponents,
+
+            isCorrect
+        );
+
+
+        const {
+
+            masteryScore,
+            kcMastery
+
+        } =
+            getMasteryData
+                ? getMasteryData(
+                    knowledgeComponents
+                )
+                : {
+                    masteryScore:
+                        null,
+
+                    kcMastery:
+                        null
+                };
 
 
         this.context.firebase.log(
+
             parsed,
+
             problemID,
+
             this.step,
+
             null,
+
             isCorrect,
+
             hintsFinished,
+
             "answerStep",
+
             chooseVariables(
-                Object.assign({}, problemVars, variabilization),
+
+                Object.assign(
+                    {},
+                    problemVars,
+                    variabilization
+                ),
+
                 seed
             ),
+
             lesson,
+
             courseName,
-            this.giveDynamicHint ? "dynamic" : "regular",
+
+            this.giveDynamicHint
+                ? "dynamic"
+                : "regular",
+
             this.state.dynamicHint,
+
             this.state.bioInfo,
+
             masteryScore,
+
             kcMastery
         );
-
     };
 
-    editInput = (event) => {
-        this.setInputValState(event.target.value);
+
+    /*
+     * Student edits answer.
+     */
+
+    editInput = (
+        event
+    ) => {
+
+        this.setInputValState(
+            event.target.value
+        );
+
+
+        /*
+         * Allow a new AI hint
+         * for a new answer.
+         */
+
         this.setState({
-            enableHintGeneration: true,
+
+            enableHintGeneration:
+                true,
+
+            lastAIHintHash:
+                null,
+
         });
     };
 
-    setInputValState = (inputVal) => {
-        this.setState(({ isCorrect }) => ({
-            inputVal,
-            isCorrect: isCorrect ? true : null,
-        }));
+
+    setInputValState = (
+        inputVal
+    ) => {
+
+        this.setState(
+            ({ isCorrect }) => ({
+
+                inputVal,
+
+                isCorrect:
+                    isCorrect
+                        ? true
+                        : null,
+            })
+        );
     };
 
-    handleKey = (event) => {
-        if (event.key === "Enter") {
+
+    handleKey = (
+        event
+    ) => {
+
+        if (
+            event.key ===
+            "Enter"
+        ) {
+
             this.submit();
         }
     };
 
-    toggleHints = (event) => {
-        if (this.giveDynamicHint && !this.state.activeHintType !== "normal") {
-            this.generateHintFromGPT();
-        } else if (!this.state.displayHints) {
-            this.setState(
-                () => ({
-                    enableHintGeneration: false,
-            }))
-        }
+
+    /*
+     * Hint button.
+     *
+     * Opens the hint panel FIRST.
+     * Then starts AI generation.
+     */
+
+    toggleHints = () => {
+
+        console.log(
+            "================================"
+        );
+
+        console.log(
+            "HINT BUTTON CLICKED"
+        );
+
+        console.log(
+            "giveDynamicHint:",
+            this.giveDynamicHint
+        );
+
+        console.log(
+            "activeHintType:",
+            this.state.activeHintType
+        );
+
+        console.log(
+            "inputVal:",
+            this.state.inputVal
+        );
+
+        console.log(
+            "isGeneratingHint:",
+            this.state.isGeneratingHint
+        );
+
+        console.log(
+            "================================"
+        );
+
+
         this.setState(
+
             (prevState) => ({
-                activeHintType: prevState.activeHintType === "normal" ? "none" : "normal"
-                }),
+
+                activeHintType:
+                    prevState.activeHintType ===
+                    "normal"
+                        ? "none"
+                        : "normal",
+            }),
+
             () => {
-                this.props.answerMade(
-                    this.index,
-                    this.step.knowledgeComponents,
-                    false
-                );
+
+                /*
+                 * Only generate AI hint when
+                 * the panel is being opened.
+                 */
+
+                if (
+                    this.giveDynamicHint &&
+                    this.state.activeHintType ===
+                    "normal"
+                ) {
+
+                    console.log(
+                        "Calling AI hint generation..."
+                    );
+
+
+                    this.generateHintFromGPT();
+                }
             }
         );
     };
 
-    unlockHint = (hintNum, hintType) => {
-        // Mark question as wrong if hints are used (on the first time)
-        const { seed, problemVars, problemID, courseName, answerMade, lesson, getMasteryData } =
-            this.props;
-        const { isCorrect, hintsFinished } = this.state;
-        const { knowledgeComponents, variabilization } = this.step;
 
-        if (hintsFinished.reduce((a, b) => a + b) === 0 && isCorrect !== true) {
-            this.setState({ usedHints: true });
-            answerMade(this.index, knowledgeComponents, false);
+    /*
+     * Unlock normal OATutor hint.
+     */
+
+    unlockHint = (
+        hintNum,
+        hintType
+    ) => {
+
+        const {
+
+            seed,
+            problemVars,
+            problemID,
+            courseName,
+            answerMade,
+            lesson,
+            getMasteryData
+
+        } = this.props;
+
+
+        const {
+
+            isCorrect,
+            hintsFinished
+
+        } = this.state;
+
+
+        const {
+
+            knowledgeComponents,
+            variabilization
+
+        } = this.step;
+
+
+        if (
+            hintsFinished.reduce(
+                (a, b) =>
+                    a + b
+            ) === 0 &&
+            isCorrect !== true
+        ) {
+
+            this.setState({
+                usedHints:
+                    true
+            });
+
+
+            answerMade(
+                this.index,
+                knowledgeComponents,
+                false
+            );
         }
 
-        // If the user has not opened a scaffold before, mark it as in-progress.
-        if (hintsFinished[hintNum] !== 1) {
-            this.setState(
-                (prevState) => {
-                    prevState.hintsFinished[hintNum] =
-                        hintType !== "scaffold" ? 1 : 0.5;
-                    return { hintsFinished: prevState.hintsFinished };
-                },
-                () => {
-                    const { firebase } = this.context;
 
-                    const { masteryScore, kcMastery } = getMasteryData
-                        ? getMasteryData(knowledgeComponents)
-                        : { masteryScore: null, kcMastery: null };
+        if (
+            hintsFinished[hintNum] !== 1
+        ) {
+
+            this.setState(
+
+                (prevState) => {
+
+                    const updatedHints =
+                        [...prevState.hintsFinished];
+
+
+                    updatedHints[
+                        hintNum
+                    ] =
+                        hintType !==
+                        "scaffold"
+                            ? 1
+                            : 0.5;
+
+
+                    return {
+
+                        hintsFinished:
+                            updatedHints
+
+                    };
+                },
+
+
+                () => {
+
+                    const {
+                        firebase
+                    } = this.context;
+
+
+                    const {
+
+                        masteryScore,
+                        kcMastery
+
+                    } =
+                        getMasteryData
+                            ? getMasteryData(
+                                knowledgeComponents
+                            )
+                            : {
+                                masteryScore:
+                                    null,
+
+                                kcMastery:
+                                    null
+                            };
+
 
                     firebase.log(
+
                         null,
+
                         problemID,
+
                         this.step,
-                        this.hints[hintNum],
+
+                        this.hints[
+                            hintNum
+                        ],
+
                         null,
-                        hintsFinished,
+
+                        this.state.hintsFinished,
+
                         "unlockHint",
+
                         chooseVariables(
-                            Object.assign({}, problemVars, variabilization),
+
+                            Object.assign(
+                                {},
+                                problemVars,
+                                variabilization
+                            ),
+
                             seed
                         ),
+
                         lesson,
+
                         courseName,
-                        this.giveDynamicHint ? "dynamic" : "regular",
+
+                        this.giveDynamicHint
+                            ? "dynamic"
+                            : "regular",
+
                         this.state.dynamicHint,
+
                         this.state.bioInfo,
+
                         masteryScore,
+
                         kcMastery
                     );
                 }
@@ -396,499 +1054,1421 @@ class ProblemCard extends React.Component {
         }
     };
 
-    submitHint = (parsed, hint, isCorrect, hintNum) => {
-        if (isCorrect) {
-            this.setState((prevState) => {
-                prevState.hintsFinished[hintNum] = 1;
-                return { hintsFinished: prevState.hintsFinished };
-            });
+
+    /*
+     * Submit hint log.
+     */
+
+    submitHint = (
+        parsed,
+        hint,
+        isCorrect,
+        hintNum
+    ) => {
+
+        if (
+            isCorrect
+        ) {
+
+            this.setState(
+                (prevState) => {
+
+                    const updatedHints =
+                        [...prevState.hintsFinished];
+
+
+                    updatedHints[
+                        hintNum
+                    ] = 1;
+
+
+                    return {
+
+                        hintsFinished:
+                            updatedHints
+
+                    };
+                }
+            );
         }
 
-        const { masteryScore, kcMastery } = this.props.getMasteryData
-            ? this.props.getMasteryData(this.step.knowledgeComponents)
-            : { masteryScore: null, kcMastery: null };
+
+        const {
+
+            masteryScore,
+            kcMastery
+
+        } =
+            this.props.getMasteryData
+                ? this.props.getMasteryData(
+                    this.step
+                        .knowledgeComponents
+                )
+                : {
+
+                    masteryScore:
+                        null,
+
+                    kcMastery:
+                        null
+                };
+
 
         this.context.firebase.hintLog(
+
             parsed,
+
             this.props.problemID,
+
             this.step,
+
             hint,
+
             isCorrect,
+
             this.state.hintsFinished,
+
             chooseVariables(
+
                 Object.assign(
                     {},
                     this.props.problemVars,
-                    this.step.variabilization
+                    this.step
+                        .variabilization
                 ),
+
                 this.props.seed
             ),
+
             this.props.lesson,
+
             this.props.courseName,
-            this.giveDynamicHint ? "dynamic" : "regular",
+
+            this.giveDynamicHint
+                ? "dynamic"
+                : "regular",
+
             this.state.dynamicHint,
+
             this.state.bioInfo,
+
             masteryScore,
+
             kcMastery
         );
     };
 
-    generateGPTHintParameters = (prompt_template, bio_info) => {
-        let inputVal = this.state.inputVal || "The student did not provide an answer.";
-        let correctAnswer = Array.isArray(this.step.stepAnswer) ? this.step.stepAnswer[0] : "";
-        const problemTitle = this.problemTitle || "Problem Title";
-        const problemSubTitle = this.problemSubTitle || "Problem Subtitle";
-        const questionTitle = this.step.stepTitle || "Question Title";
-        const questionSubTitle = this.step.stepBody || "Question Subtitle";
 
-        // Replace placeholders in the template with actual values
-        const promptContent = prompt_template
-            .replace("{problem_title}", problemTitle)
-            .replace("{problem_subtitle}", problemSubTitle)
-            .replace("{question_title}", questionTitle)
-            .replace("{question_subtitle}", questionSubTitle)
-            .replace("{student_answer}", inputVal)
-            .replace("{correct_answer}", correctAnswer);
-        return  {
-            role: "user",
-            message: promptContent
-            }
+    /*
+     * Build prompt for backend.
+     */
+
+    generateGPTHintParameters = (
+        prompt_template,
+        bio_info
+    ) => {
+
+        const inputVal =
+            this.state.inputVal ||
+            "The student did not provide an answer.";
+
+
+        const correctAnswer =
+            Array.isArray(
+                this.step.stepAnswer
+            )
+                ? this.step.stepAnswer[0]
+                : this.step.stepAnswer || "";
+
+
+        const problemTitle =
+            this.problemTitle ||
+            "Problem Title";
+
+
+        const problemSubTitle =
+            this.problemSubTitle ||
+            "Problem Subtitle";
+
+
+        const questionTitle =
+            this.step.stepTitle ||
+            "Question Title";
+
+
+        const questionSubTitle =
+            this.step.stepBody ||
+            "Question Subtitle";
+
+
+        const promptContent =
+            prompt_template
+
+                .replace(
+                    "{problem_title}",
+                    problemTitle
+                )
+
+                .replace(
+                    "{problem_subtitle}",
+                    problemSubTitle
+                )
+
+                .replace(
+                    "{question_title}",
+                    questionTitle
+                )
+
+                .replace(
+                    "{question_subtitle}",
+                    questionSubTitle
+                )
+
+                .replace(
+                    "{student_answer}",
+                    inputVal
+                )
+
+                .replace(
+                    "{correct_answer}",
+                    correctAnswer
+                );
+
+
+        return {
+
+            role:
+                "user",
+
+            message:
+                promptContent
         };
+    };
 
-    generateHintFromGPT = async (forceRegenerate) => {
-        const { inputVal, lastAIHintHash, isGeneratingHint } = this.state;
 
-        const currentHash = this.hashAnswer(inputVal);
+    /*
+     * Generate AI hint.
+     */
 
-        // If a hint is currently being generated through streaming, 
-        // do not generate a new hint
-        if (isGeneratingHint) {
+    generateHintFromGPT = async (
+        forceRegenerate
+    ) => {
+
+        const {
+
+            inputVal,
+            lastAIHintHash,
+            isGeneratingHint
+
+        } = this.state;
+
+
+        const currentHash =
+            this.hashAnswer(
+                inputVal
+            );
+
+
+        if (
+            isGeneratingHint
+        ) {
+
+            console.log(
+                "AI hint is already being generated."
+            );
+
             return;
         }
 
-        // If the current hash matches the last hash, skip regeneration
-        // If forceRegenerate is true, the regenerate button was pressed
-        if ((currentHash === lastAIHintHash) && !forceRegenerate) {
-            console.log("Hint already generated for this answer, skipping regeneration.");
+
+        if (
+            currentHash ===
+                lastAIHintHash &&
+            !forceRegenerate
+        ) {
+
+            console.log(
+                "Hint already generated for this answer."
+            );
+
             return;
         }
+
+
+        /*
+         * Mark generation as active.
+         */
 
         this.setState({
-            dynamicHint: "Loading...", // Clear previous hint
-            isGeneratingHint: true,
-            lastAIHintHash: currentHash,
+
+            dynamicHint:
+                "Loading...",
+
+            isGeneratingHint:
+                true,
+
+            enableHintGeneration:
+                false,
+
+            lastAIHintHash:
+                currentHash,
+
         });
-    
-        const [parsed, correctAnswer, reason] = checkAnswer({
-            attempt: this.state.inputVal,
-            actual: this.step.stepAnswer,
-            answerType: this.step.answerType,
-            precision: this.step.precision,
-            variabilization: chooseVariables(
-                Object.assign(
-                    {},
-                    this.props.problemVars,
-                    this.props.variabilization
+
+
+        const [
+            parsed,
+            correctAnswer
+        ] = checkAnswer({
+
+            attempt:
+                this.state.inputVal,
+
+            actual:
+                this.step.stepAnswer,
+
+            answerType:
+                this.step.answerType,
+
+            precision:
+                this.step.precision,
+
+            variabilization:
+                chooseVariables(
+
+                    Object.assign(
+                        {},
+                        this.props.problemVars,
+                        this.props.variabilization
+                    ),
+
+                    this.props.seed
                 ),
-                this.props.seed
-            ),
+
             questionText:
-                this.step.stepBody.trim() || this.step.stepTitle.trim(),
-            answerValidator: this.step.answerValidator
+                this.step.stepBody.trim() ||
+                this.step.stepTitle.trim(),
+
+            answerValidator:
+                this.step.answerValidator
         });
-    
-        const isCorrect = !!correctAnswer;
-    
-        // Define callbacks
-        const onChunkReceived = (streamedHint) => {
-            this.setState((prevState) => ({
-                hints: prevState.hints.map((hint) =>
-                    hint.type === "gptHint"
-                        ? { ...hint, text: streamedHint || this.translate("hintsystem.errorHint") }
-                        : hint
-                ),
-            }));
+
+
+        const isCorrect =
+            !!correctAnswer;
+
+
+        /*
+         * AI response received.
+         *
+         * IMPORTANT:
+         * Update BOTH:
+         *
+         * 1. dynamicHint
+         * 2. gptHint inside hints
+         */
+
+        const onChunkReceived = (
+            generatedHint
+        ) => {
+
+            console.log(
+                "AI HINT RECEIVED:",
+                generatedHint
+            );
+
+
+            this.setState(
+                (prevState) => ({
+
+                    dynamicHint:
+                        generatedHint,
+
+                    hints:
+                        prevState.hints.map(
+                            (hint) =>
+
+                                hint.type ===
+                                "gptHint"
+
+                                    ? {
+
+                                        ...hint,
+
+                                        text:
+                                            generatedHint ||
+                                            "Loading..."
+
+                                    }
+
+                                    : hint
+                        )
+                })
+            );
         };
 
-        /** When the hint generation is completed, set the `isGeneratingHint` state to false
-         * in order to regenerate the hint.
+
+        /*
+         * AI generation completed.
          */
+
         const onSuccessfulCompletion = () => {
-            this.setState({
-                isGeneratingHint: false,
-            });
-        }
-    
-        /** When we receive an error in the hint generation process,
-         *  revert back to manual hints.
-         */
-        const onError = (error) => {
-            this.setState({
-                isGeneratingHint: false,
-            })
-            console.error("Error generating AI hint:", error);
-        
-            this.hints = JSON.parse(
-                JSON.stringify(this.step.hints[this.context.hintPathway])
+
+            console.log(
+                "AI HINT GENERATION COMPLETED"
             );
-            for (let hint of this.hints) {
-                hint.dependencies = hint.dependencies.map((dependency) =>
-                    this._findHintId(this.hints, dependency)
+        
+            this.recordAIHintGenerated();
+        
+            this.setState({
+                isGeneratingHint:
+                    false,
+        
+                enableHintGeneration:
+                    true
+            });
+        };
+
+
+        /*
+         * AI generation failed.
+         *
+         * Restore normal OATutor hints.
+         */
+
+        const onError = (
+            error
+        ) => {
+
+            console.error(
+                "Error generating AI hint:",
+                error
+            );
+
+
+            const restoredHints =
+                JSON.parse(
+                    JSON.stringify(
+                        this.step.hints[
+                            this.context
+                                .hintPathway
+                        ]
+                    )
                 );
-                if (hint.subHints) {
-                    for (let subHint of hint.subHints) {
-                        subHint.dependencies = subHint.dependencies.map(
-                            (dependency) =>
-                                this._findHintId(hint.subHints, dependency)
-                        );
+
+
+            /*
+             * Restore dependencies.
+             */
+
+            for (
+                let hint of restoredHints
+            ) {
+
+                hint.dependencies =
+                    hint.dependencies.map(
+                        (dependency) =>
+                            this._findHintId(
+                                restoredHints,
+                                dependency
+                            )
+                    );
+
+
+                if (
+                    hint.subHints
+                ) {
+
+                    for (
+                        let subHint of
+                        hint.subHints
+                    ) {
+
+                        subHint.dependencies =
+                            subHint.dependencies.map(
+                                (dependency) =>
+                                    this._findHintId(
+                                        hint.subHints,
+                                        dependency
+                                    )
+                            );
                     }
                 }
             }
 
-            // Bottom out hints option
 
-            console.log("Constructor - About to check bottom hints:", this.giveStuBottomHint, this.context.debug, this.context["use_expanded_view"]);
+            /*
+             * Restore bottom-out hint.
+             */
 
             if (
                 this.giveStuBottomHint &&
-                !(this.context.debug && this.context["use_expanded_view"])
+                !(
+                    this.context.debug &&
+                    this.context[
+                        "use_expanded_view"
+                    ]
+                )
             ) {
-                // Bottom out hints
-                this.hints.push({
-                    id: this.step.id + "-h" + (this.hints.length + 1),
-                    title: this.translate('hintsystem.answer'),
-                    text: this.translate('hintsystem.answerIs') + this.step.stepAnswer,
-                    type: "bottomOut",
-                    dependencies: Array.from(Array(this.hints.length).keys()),
+
+                restoredHints.push({
+
+                    id:
+                        this.step.id +
+                        "-h" +
+                        (
+                            restoredHints.length +
+                            1
+                        ),
+
+                    title:
+                        this.translate(
+                            "hintsystem.answer"
+                        ),
+
+                    text:
+                        this.translate(
+                            "hintsystem.answerIs"
+                        ) +
+                        this.step.stepAnswer,
+
+                    type:
+                        "bottomOut",
+
+                    dependencies:
+                        Array.from(
+                            Array(
+                                restoredHints.length
+                            ).keys()
+                        ),
                 });
-                // Bottom out sub hints
-                this.hints.map((hint, i) => {
-                    if (hint.type === "scaffold") {
-                        if (hint.subHints == null) {
-                            hint.subHints = [];
+
+
+                restoredHints.map(
+                    (
+                        hint,
+                        i
+                    ) => {
+
+                        if (
+                            hint.type ===
+                            "scaffold"
+                        ) {
+
+                            if (
+                                hint.subHints ==
+                                null
+                            ) {
+
+                                hint.subHints =
+                                    [];
+                            }
+
+
+                            hint.subHints.push({
+
+                                id:
+                                    this.step.id +
+                                    "-h" +
+                                    i +
+                                    "-s" +
+                                    (
+                                        hint
+                                            .subHints
+                                            .length +
+                                        1
+                                    ),
+
+                                title:
+                                    this.translate(
+                                        "hintsystem.answer"
+                                    ),
+
+                                text:
+                                    this.translate(
+                                        "hintsystem.answerIs"
+                                    ) +
+                                    hint.hintAnswer[0],
+
+                                type:
+                                    "bottomOut",
+
+                                dependencies:
+                                    Array.from(
+                                        Array(
+                                            hint
+                                                .subHints
+                                                .length
+                                        ).keys()
+                                    ),
+                            });
                         }
-                        hint.subHints.push({
-                            id:
-                                this.step.id +
-                                "-h" +
-                                i +
-                                "-s" +
-                                (hint.subHints.length + 1),
-                            title: this.translate('hintsystem.answer'),
-                            text: this.translate('hintsystem.answerIs') + hint.hintAnswer[0],
-                            type: "bottomOut",
-                            dependencies: Array.from(
-                                Array(hint.subHints.length).keys()
-                            ),
-                        });
+
+                        return null;
                     }
-                    return null;
-                });
+                );
             }
-        
-            this.setState({
-                hints: this.hints,
-                giveDynamicHint: false, // Switch to manual hints
-                activeHintType: "normal",
-                dynamicHint: "Failed to generate AI hint. Displaying manual hints.",
-                hintsFinished: new Array(this.hints.length).fill(0),
+
+
+            /*
+             * Put AI hint back at the top.
+             */
+
+            restoredHints.unshift({
+
+                id:
+                    this.step.id +
+                    "-h0",
+
+                title:
+                    "ChatGPT AI Hint",
+
+                text:
+                    "AI hint could not be generated. "
+                    +
+                    "Please use the available hints.",
+
+                type:
+                    "gptHint",
+
+                dependencies:
+                    [],
             });
-        };            
-    
-        // Call ChatGPT to fetch the dynamic hint using streaming
+
+
+            const restoredHintStatus =
+                new Array(
+                    restoredHints.length
+                ).fill(0);
+
+
+            this.setState({
+
+                hints:
+                    restoredHints,
+
+                dynamicHint:
+                    "",
+
+                isGeneratingHint:
+                    false,
+
+                enableHintGeneration:
+                    true,
+
+                activeHintType:
+                    "normal",
+
+                hintsFinished:
+                    restoredHintStatus,
+
+                lastAIHintHash:
+                    null,
+
+            });
+        };
+
+
+        /*
+         * Send request to Flask backend.
+         */
+
         fetchDynamicHint(
+
             DYNAMIC_HINT_URL,
-            this.generateGPTHintParameters(this.prompt_template, this.state.bioInfo),
+
+            this.generateGPTHintParameters(
+
+                this.prompt_template,
+
+                this.state.bioInfo
+            ),
+
             onChunkReceived,
+
             onSuccessfulCompletion,
+
             onError,
+
             this.props.problemID,
+
             chooseVariables(
+
                 Object.assign(
                     {},
                     this.props.problemVars,
                     this.step.variabilization
                 ),
+
                 this.props.seed
             ),
+
             this.context
         );
-    
-        // TODO: Update firebase logging to log when
-        // 1. The dynamic hint is opened
-        // 2. The regenerate button is clicked
 
-        const { masteryScore, kcMastery } = this.props.getMasteryData
-            ? this.props.getMasteryData(this.step.knowledgeComponents)
-            : { masteryScore: null, kcMastery: null };
+
+        /*
+         * Log AI hint request.
+         */
+
+        const {
+
+            masteryScore,
+            kcMastery
+
+        } =
+            this.props.getMasteryData
+                ? this.props.getMasteryData(
+                    this.step
+                        .knowledgeComponents
+                )
+                : {
+
+                    masteryScore:
+                        null,
+
+                    kcMastery:
+                        null
+                };
+
 
         this.context.firebase.log(
+
             parsed,
+
             this.props.problemID,
+
             this.step,
+
             "",
+
             isCorrect,
+
             this.state.hintsFinished,
+
             "requestDynamicHint",
+
             chooseVariables(
+
                 Object.assign(
                     {},
                     this.props.problemVars,
                     this.props.variabilization
                 ),
+
                 this.props.seed
             ),
+
             this.props.lesson,
+
             this.props.courseName,
+
             "dynamic",
+
             this.state.dynamicHint,
+
             this.state.bioInfo,
+
             masteryScore,
+
             kcMastery
         );
     };
-        
+
+    recordAIHintGenerated = () => {
+        try {
+            const ANALYTICS_KEY =
+                "edututor_learning_analytics_v1";
+    
+            const existing =
+                localStorage.getItem(
+                    ANALYTICS_KEY
+                );
+    
+            let events = [];
+    
+            if (existing) {
+                try {
+                    const parsed =
+                        JSON.parse(existing);
+    
+                    if (Array.isArray(parsed)) {
+                        events = parsed;
+                    }
+                } catch (error) {
+                    events = [];
+                }
+            }
+    
+            events.push({
+                eventType:
+                    "hint_generated",
+    
+                timestamp:
+                    new Date().toISOString(),
+    
+                problemId:
+                    this.props.problemID ||
+                    null,
+    
+                lessonId:
+                    this.props.lesson?.id ||
+                    this.props.lesson ||
+                    null,
+    
+                courseName:
+                    this.props.courseName ||
+                    null,
+    
+                hintType:
+                    "AI"
+            });
+    
+            if (events.length > 2000) {
+                events =
+                    events.slice(-2000);
+            }
+    
+            localStorage.setItem(
+                ANALYTICS_KEY,
+                JSON.stringify(events)
+            );
+    
+            console.log(
+                "EduTutor AI hint analytics recorded"
+            );
+    
+        } catch (error) {
+            console.error(
+                "Unable to record AI hint analytics:",
+                error
+            );
+        }
+    };
+
+
+    /*
+     * Render.
+     */
 
     render() {
-        const { translate } = this.props;
-        const { classes, problemID, problemVars, seed } = this.props;
-        const { isCorrect } = this.state;
-        const { debug, use_expanded_view } = this.context;
 
-        const problemAttempted = isCorrect != null;
+        const {
+            translate
+        } = this.props;
+
+
+        const {
+
+            classes,
+            problemID,
+            problemVars,
+            seed
+
+        } = this.props;
+
+
+        const {
+            isCorrect
+        } = this.state;
+
+
+        const {
+
+            debug,
+            use_expanded_view
+
+        } = this.context;
+
+
+        const problemAttempted =
+            isCorrect != null;
+
 
         return (
-            <Card className={classes.card}>
+
+            <Card
+                className={
+                    classes.card
+                }
+            >
+
                 <CardContent>
-                    <h2 className={classes.stepHeader}>
+
+                    <h2
+                        className={
+                            classes.stepHeader
+                        }
+                    >
+
                         {renderText(
+
                             this.step.stepTitle,
+
                             problemID,
+
                             chooseVariables(
+
                                 Object.assign(
                                     {},
                                     problemVars,
-                                    this.step.variabilization
+                                    this.step
+                                        .variabilization
                                 ),
+
                                 seed
                             ),
+
                             this.context
                         )}
+
+
                         <hr />
+
                     </h2>
 
-                    <div className={classes.stepBody}>
+
+                    <div
+                        className={
+                            classes.stepBody
+                        }
+                    >
+
                         {renderText(
+
                             this.step.stepBody,
+
                             problemID,
+
                             chooseVariables(
+
                                 Object.assign(
                                     {},
                                     problemVars,
-                                    this.step.variabilization
+                                    this.step
+                                        .variabilization
                                 ),
+
                                 seed
                             ),
+
                             this.context
                         )}
+
                     </div>
-                    {(this.state.activeHintType === "normal" || (debug && use_expanded_view)) &&
-                        this.showHints && (
-                            <div className="Hints">
-                                <ErrorBoundary
-                                    componentName={"HintSystem"}
-                                    descriptor={"hint"}
-                                >
-                                    <HintSystem
-                                        key={`hints-${this.giveDynamicHint ? 'dynamic' : 'manual'}`}
-                                        giveHintOnIncorrect={this.giveHintOnIncorrect}
-                                        giveDynamicHint={this.giveDynamicHint}
-                                        giveStuFeedback={this.giveStuFeedback}
-                                        unlockFirstHint={this.unlockFirstHint}
-                                        problemID={this.props.problemID}
-                                        index={this.props.index}
-                                        step={this.step}
-                                        hints={this.state.hints}
-                                        unlockHint={this.unlockHint}
-                                        hintStatus={this.state.hintsFinished}
-                                        submitHint={this.submitHint}
-                                        seed={this.props.seed}
-                                        stepVars={Object.assign(
+
+
+                    {(
+                        this.state.activeHintType ===
+                        "normal" ||
+
+                        (
+                            debug &&
+                            use_expanded_view
+                        )
+
+                    ) &&
+
+                    this.showHints && (
+
+                        <div
+                            className="Hints"
+                        >
+
+                            <ErrorBoundary
+                                componentName="HintSystem"
+                                descriptor="hint"
+                            >
+
+                                <HintSystem
+
+                                    key="hints-dynamic"
+
+                                    giveHintOnIncorrect={
+                                        this.giveHintOnIncorrect
+                                    }
+
+                                    giveDynamicHint={
+                                        this.giveDynamicHint
+                                    }
+
+                                    giveStuFeedback={
+                                        this.giveStuFeedback
+                                    }
+
+                                    unlockFirstHint={
+                                        this.unlockFirstHint
+                                    }
+
+                                    problemID={
+                                        this.props.problemID
+                                    }
+
+                                    index={
+                                        this.props.index
+                                    }
+
+                                    step={
+                                        this.step
+                                    }
+
+                                    hints={
+                                        this.state.hints
+                                    }
+
+                                    unlockHint={
+                                        this.unlockHint
+                                    }
+
+                                    hintStatus={
+                                        this.state.hintsFinished
+                                    }
+
+                                    submitHint={
+                                        this.submitHint
+                                    }
+
+                                    seed={
+                                        this.props.seed
+                                    }
+
+                                    stepVars={
+                                        Object.assign(
                                             {},
                                             this.props.problemVars,
-                                            this.step.variabilization
-                                        )}
-                                        answerMade={this.props.answerMade}
-                                        lesson={this.props.lesson}
-                                        courseName={this.props.courseName}
-                                        isIncorrect={this.expandFirstIncorrect}
-                                        generateHintFromGPT={this.generateHintFromGPT}
-                                        isGeneratingHint={this.state.isGeneratingHint}
-                                    />
-                                </ErrorBoundary>
-                                <Spacer />
-                            </div>
-                        )}
+                                            this.step
+                                                .variabilization
+                                        )
+                                    }
 
-                    <div className={classes.root}>
+                                    answerMade={
+                                        this.props.answerMade
+                                    }
+
+                                    lesson={
+                                        this.props.lesson
+                                    }
+
+                                    courseName={
+                                        this.props.courseName
+                                    }
+
+                                    isIncorrect={
+                                        this.expandFirstIncorrect
+                                    }
+
+                                    generateHintFromGPT={
+                                        this.generateHintFromGPT
+                                    }
+
+                                    isGeneratingHint={
+                                        this.state.isGeneratingHint
+                                    }
+
+                                />
+
+                            </ErrorBoundary>
+
+
+                            <Spacer />
+
+                        </div>
+                    )}
+
+
+                    <div
+                        className={
+                            classes.root
+                        }
+                    >
+
                         <ProblemInput
-                            variabilization={chooseVariables(
-                                Object.assign(
-                                    {},
-                                    this.props.problemVars,
-                                    this.step.variabilization
-                                ),
+
+                            variabilization={
+                                chooseVariables(
+
+                                    Object.assign(
+                                        {},
+                                        problemVars,
+                                        this.step
+                                            .variabilization
+                                    ),
+
+                                    this.props.seed
+                                )
+                            }
+
+                            allowRetry={
+                                this.allowRetry
+                            }
+
+                            giveStuFeedback={
+                                this.giveStuFeedback
+                            }
+
+                            showCorrectness={
+                                this.showCorrectness
+                            }
+
+                            classes={
+                                classes
+                            }
+
+                            state={
+                                this.state
+                            }
+
+                            step={
+                                this.step
+                            }
+
+                            seed={
                                 this.props.seed
-                            )}
-                            allowRetry={this.allowRetry}
-                            giveStuFeedback={this.giveStuFeedback}
-                            showCorrectness={this.showCorrectness}
-                            classes={classes}
-                            state={this.state}
-                            step={this.step}
-                            seed={this.props.seed}
-                            keepMCOrder={this.props.keepMCOrder}
-                            keyboardType={this.props.keyboardType}
-                            _setState={(state) => this.setState(state)}
-                            context={this.context}
-                            editInput={this.editInput}
-                            setInputValState={this.setInputValState}
-                            handleKey={this.handleKey}
-                            index={this.props.index}
+                            }
+
+                            keepMCOrder={
+                                this.keepMCOrder
+                            }
+
+                            keyboardType={
+                                this.keyboardType
+                            }
+
+                            _setState={
+                                (state) =>
+                                    this.setState(
+                                        state
+                                    )
+                            }
+
+                            context={
+                                this.context
+                            }
+
+                            editInput={
+                                this.editInput
+                            }
+
+                            setInputValState={
+                                this.setInputValState
+                            }
+
+                            handleKey={
+                                this.handleKey
+                            }
+
+                            index={
+                                this.props.index
+                            }
+
                         />
+
                     </div>
+
                 </CardContent>
+
+
                 <CardActions>
+
                     <Grid
                         container
                         spacing={0}
                         justifyContent="center"
                         alignItems="center"
                     >
-                        <Grid item xs={false} sm={false} md={4} />
-                        <Grid item xs={4} sm={4} md={1}>
+
+                        <Grid
+                            item
+                            xs={false}
+                            sm={false}
+                            md={4}
+                        />
+
+
+                        <Grid
+                            item
+                            xs={4}
+                            sm={4}
+                            md={1}
+                        >
+
                             {this.showHints && (
+
                                 <center>
+
                                     <IconButton
-                                        aria-label="delete"
-                                        onClick={this.toggleHints}
-                                        title="View available hints"
-                                        disabled={
-                                            !this.state.enableHintGeneration
+
+                                        aria-label="hint"
+
+                                        onClick={
+                                            this.toggleHints
                                         }
+
+                                        title="View available hints"
+
+                                        disabled={
+                                            !this.state
+                                                .enableHintGeneration
+                                        }
+
                                         className="image-container"
+
                                         {...stagingProp({
-                                            "data-selenium-target": `hint-button-${this.props.index}`,
+                                            "data-selenium-target":
+                                                `hint-button-${this.props.index}`,
                                         })}
                                     >
+
                                         <img
+
                                             src={`${process.env.PUBLIC_URL}/static/images/icons/raise_hand.png`}
+
                                             className={
-                                                this.state.enableHintGeneration
+                                                this.state
+                                                    .enableHintGeneration
                                                     ? "image"
                                                     : "image image-grayed-out"
                                             }
+
                                             alt="hintToggle"
+
                                         />
+
                                     </IconButton>
+
                                 </center>
+
                             )}
+
                         </Grid>
-                        <Grid item xs={4} sm={4} md={2}>
+
+
+                        <Grid
+                            item
+                            xs={4}
+                            sm={4}
+                            md={2}
+                        >
+
                             <center>
+
                                 <Button
-                                    className={classes.button}
-                                    style={{ width: "80%" }}
-                                    size="small"
-                                    onClick={this.submit}
-                                    disabled={
-                                        (use_expanded_view && debug) ||
-                                        (!this.allowRetry && problemAttempted)
+
+                                    className={
+                                        classes.button
                                     }
+
+                                    style={{
+                                        width: "80%"
+                                    }}
+
+                                    size="small"
+
+                                    onClick={
+                                        this.submit
+                                    }
+
+                                    disabled={
+
+                                        (
+                                            use_expanded_view &&
+                                            debug
+                                        ) ||
+
+                                        (
+                                            !this.allowRetry &&
+                                            problemAttempted
+                                        )
+
+                                    }
+
                                     {...stagingProp({
-                                        "data-selenium-target": `submit-button-${this.props.index}`,
+                                        "data-selenium-target":
+                                            `submit-button-${this.props.index}`,
                                     })}
                                 >
-                                    {translate('problem.Submit')}
+
+                                    {
+                                        translate(
+                                            "problem.Submit"
+                                        )
+                                    }
+
                                 </Button>
+
                             </center>
+
                         </Grid>
-                        <Grid item xs={4} sm={3} md={1}>
+
+
+                        <Grid
+                            item
+                            xs={4}
+                            sm={3}
+                            md={1}
+                        >
+
                             <div
                                 style={{
-                                    display: "flex",
-                                    flexDirection: "row",
-                                    alignContent: "center",
-                                    justifyContent: "center",
+                                    display:
+                                        "flex",
+
+                                    flexDirection:
+                                        "row",
+
+                                    alignContent:
+                                        "center",
+
+                                    justifyContent:
+                                        "center",
                                 }}
                             >
-                                {(!this.showCorrectness ||
-                                    !this.allowRetry) && (
+
+                                {(
+                                    !this.showCorrectness ||
+                                    !this.allowRetry
+                                ) && (
+
                                     <img
-                                        className={classes.checkImage}
+
+                                        className={
+                                            classes.checkImage
+                                        }
+
                                         style={{
+
                                             opacity:
-                                                this.state.isCorrect == null
+                                                this.state
+                                                    .isCorrect ===
+                                                null
                                                     ? 0
                                                     : 1,
-                                            width: "45%",
+
+                                            width:
+                                                "45%",
+
                                         }}
+
                                         alt="Exclamation Mark Icon"
-                                        title={`The instructor has elected to ${joinList(
-                                            !this.showCorrectness &&
-                                                "hide correctness",
-                                            !this.allowRetry &&
-                                                "disallow retries"
-                                        )}`}
+
+                                        title={
+                                            `The instructor has elected to ${joinList(
+
+                                                !this.showCorrectness &&
+                                                    "hide correctness",
+
+                                                !this.allowRetry &&
+                                                    "disallow retries"
+
+                                            )}`
+                                        }
+
                                         {...stagingProp({
-                                            "data-selenium-target": `step-correct-img-${this.props.index}`,
+                                            "data-selenium-target":
+                                                `step-correct-img-${this.props.index}`,
                                         })}
+
                                         src={`${process.env.PUBLIC_URL}/static/images/icons/exclamation.svg`}
+
                                     />
+
                                 )}
+
+
                                 {this.state.isCorrect &&
                                     this.showCorrectness &&
                                     this.allowRetry && (
-                                        <img
-                                            className={classes.checkImage}
-                                            style={{
-                                                opacity:
-                                                    this.state.checkMarkOpacity,
-                                                width: "45%",
-                                            }}
-                                            alt="Green Checkmark Icon"
-                                            {...stagingProp({
-                                                "data-selenium-target": `step-correct-img-${this.props.index}`,
-                                            })}
-                                            src={`${process.env.PUBLIC_URL}/static/images/icons/green_check.svg`}
-                                        />
-                                    )}
+
+                                    <img
+
+                                        className={
+                                            classes.checkImage
+                                        }
+
+                                        style={{
+
+                                            opacity:
+                                                this.state
+                                                    .checkMarkOpacity,
+
+                                            width:
+                                                "45%",
+
+                                        }}
+
+                                        alt="Green Checkmark Icon"
+
+                                        {...stagingProp({
+                                            "data-selenium-target":
+                                                `step-correct-img-${this.props.index}`,
+                                        })}
+
+                                        src={`${process.env.PUBLIC_URL}/static/images/icons/green_check.svg`}
+
+                                    />
+
+                                )}
+
+
                                 {this.state.isCorrect === false &&
                                     this.showCorrectness &&
                                     this.allowRetry && (
-                                        <img
-                                            className={classes.checkImage}
-                                            style={{
-                                                opacity:
-                                                    100 -
-                                                    this.state.checkMarkOpacity,
-                                                width: "45%",
-                                            }}
-                                            alt="Red X Icon"
-                                            {...stagingProp({
-                                                "data-selenium-target": `step-correct-img-${this.props.index}`,
-                                            })}
-                                            src={`${process.env.PUBLIC_URL}/static/images/icons/error.svg`}
-                                        />
-                                    )}
+
+                                    <img
+
+                                        className={
+                                            classes.checkImage
+                                        }
+
+                                        style={{
+
+                                            opacity:
+                                                100 -
+                                                this.state
+                                                    .checkMarkOpacity,
+
+                                            width:
+                                                "45%",
+
+                                        }}
+
+                                        alt="Red X Icon"
+
+                                        {...stagingProp({
+                                            "data-selenium-target":
+                                                `step-correct-img-${this.props.index}`,
+                                        })}
+
+                                        src={`${process.env.PUBLIC_URL}/static/images/icons/error.svg`}
+
+                                    />
+
+                                )}
+
                             </div>
+
                         </Grid>
-                        <Grid item xs={false} sm={1} md={4} />
+
+
+                        <Grid
+                            item
+                            xs={false}
+                            sm={1}
+                            md={4}
+                        />
+
                     </Grid>
+
                 </CardActions>
+
             </Card>
         );
     }
 }
 
-export default withStyles(styles)(withTranslation(ProblemCard));
+
+export default withStyles(styles)(
+    withTranslation(
+        ProblemCard
+    )
+);

@@ -4,6 +4,7 @@ import Platform from "./platform-logic/Platform.js";
 import DebugPlatform from "./platform-logic/DebugPlatform.js";
 import Firebase from "@components/Firebase.js";
 import { LocalizationProvider } from "./util/LocalizationContext";
+import EducatorDashboard from "@components/analytics/EducatorDashboard";
 import {
     AB_TEST_MODE
 } from "./config/config.js";
@@ -38,6 +39,7 @@ import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
 import { IS_STAGING_OR_DEVELOPMENT } from "./util/getBuildType";
 import TabFocusTrackerWrapper from "./components/TabFocusTrackerWrapper";
 import ViewAllProblems from "./components/problem-layout/ViewAllProblems";
+import EvaluationPanel from "@components/analytics/EvaluationPanel";
 
 // ### BEGIN CUSTOMIZABLE IMPORTS ###
 import config from "./config/firebaseConfig.js";
@@ -399,6 +401,22 @@ class App extends React.Component {
                                             />
                                         )}
                                     />
+                                    <Route
+    exact
+    path="/educator-dashboard"
+    render={(props) => (
+        <EducatorDashboard
+            {...props}
+        />
+    )}
+/>
+<Route
+    exact
+    path="/evaluation"
+    render={(props) => (
+        <EvaluationPanel {...props} />
+    )}
+/>
                                     <Route
                                         exact
                                         path="/assignment-not-linked"
